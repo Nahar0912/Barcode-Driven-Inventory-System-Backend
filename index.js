@@ -1,19 +1,43 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
-
 const app = express();
 const PORT = 5000;
 
+// Proper CORS configuration
+app.use(cors({
+  origin: 'http://localhost:5173', // Frontend URL
+  credentials: true // Accept cookies from frontend
+}));
+
+
 // Middleware
+app.use(cookieParser()); // Add this to read cookies
 app.use(cors());
 app.use(express.json());
+
+// (Optional: For edge cases) Set manual headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); // ✅ Exact origin
+  res.header('Access-Control-Allow-Credentials', 'true'); // ✅ Allow credentials
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
+
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://anika:pTnhynCIOg4QJc9G@cluster0.o0nwk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
+    
+// JWT Secret
+require('dotenv').config();
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_here';
 
 // Schemas
 const productSchema = new mongoose.Schema({
@@ -25,10 +49,108 @@ const productSchema = new mongoose.Schema({
 
 const categorySchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true }
-},{ versionKey: false });
+}, { versionKey: false });
+
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  passwordHash: { type: String, required: true }
+}, { versionKey: false });
 
 const Product = mongoose.model('Product', productSchema);
 const Category = mongoose.model('Category', categorySchema);
+const User = mongoose.model('User', userSchema);
+
+// Auth middleware
+const authenticateJWT = (req, res, next) => {
+  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Authentication required' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
+// --- AUTH ROUTES ---
+
+app.post('/api/auth/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: 'User already exists' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const newUser = new User({ email, passwordHash });
+    await newUser.save();
+
+    // Auto-login after registration
+    const token = jwt.sign(
+      { userId: newUser._id, email: newUser.email, role: newUser.role },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    }).json({ message: 'Registered and logged in successfully' });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Registration failed', error: error.message });
+  }
+});
+
+
+// Login route
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ message: 'Email and password required' });
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(401).json({ message: 'Invalid credentials' });
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+
+    // Send JWT token as httpOnly cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      sameSite: 'strict'
+    }).json({ message: 'Login successful' });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+});
+
+// Logout route
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token').json({ message: 'Logged out successfully' });
+});
+
+// Auth check (protected route)
+app.get('/api/auth/check', authenticateJWT, (req, res) => {
+  res.json({ message: 'Authenticated', user: req.user });
+});
+
 
 // Product APIs
 
@@ -149,6 +271,35 @@ app.delete('/api/categories/:name', async (req, res) => {
         res.status(500).json({ message: 'Error deleting category', error: error.message });
     }
 });
+
+// Analytics Route --------->
+app.get('/api/analytics', async (req, res) => {
+  try {
+    const categories = await Category.find();
+    const products = await Product.find().sort({ createdAt: -1 });
+
+    // Count products in each category
+    const categoryCounts = {};
+    categories.forEach(cat => {
+      categoryCounts[cat.name] = products.filter(product => product.category === cat.name).length;
+    });
+
+    // Add Uncategorized count
+    categoryCounts['Uncategorized'] = products.filter(product => product.category === 'Uncategorized').length;
+
+    // Get recently added 5 products
+    const recentProducts = products.slice(0, 5);
+
+    res.json({
+      categoryCounts,
+      recentProducts,
+      totalProducts: products.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch analytics' });
+  }
+});
+
 
 // Start server
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
