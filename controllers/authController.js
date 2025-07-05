@@ -23,9 +23,9 @@ exports.register = async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000
+      secure: true,   
+      sameSite: 'None',
+      maxAge: 24 * 60 * 60 * 1000 
     }).json({ message: 'Registered and logged in successfully' });
   } catch (error) {
     console.error('Registration error:', error);
@@ -50,9 +50,9 @@ exports.login = async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true, 
-      maxAge: 24 * 60 * 60 * 1000,
-      sameSite: 'none'
+      secure: true,    // Required for cross-site cookies
+      sameSite: 'None',
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
     }).json({ message: 'Login successful' });
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message });
@@ -60,7 +60,11 @@ exports.login = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
-  res.clearCookie('token').json({ message: 'Logged out successfully' });
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'None'
+  }).json({ message: 'Logged out successfully' });
 };
 
 exports.checkAuth = (req, res) => {
