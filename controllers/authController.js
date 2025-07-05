@@ -24,7 +24,7 @@ exports.register = async (req, res) => {
     res.cookie('token', token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      sameSite: 'none',
       maxAge: 24 * 60 * 60 * 1000
     }).json({ message: 'Registered and logged in successfully' });
   } catch (error) {
@@ -52,7 +52,7 @@ exports.login = async (req, res) => {
       httpOnly: true,
       secure: true, 
       maxAge: 24 * 60 * 60 * 1000,
-      sameSite: 'lax'
+      sameSite: 'none'
     }).json({ message: 'Login successful' });
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message });
