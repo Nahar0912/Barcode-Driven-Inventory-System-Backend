@@ -5,38 +5,33 @@ const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
+require('dotenv').config();
+
 const app = express();
-const PORT = 5000;
 
-// Proper CORS configuration
-app.use(cors({
-  origin: 'http://localhost:5173', // Frontend URL
-  credentials: true // Accept cookies from frontend
-}));
-
-
-// Middleware
-app.use(cookieParser()); // Add this to read cookies
-app.use(cors());
-app.use(express.json());
-
-// (Optional: For edge cases) Set manual headers
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); 
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  next();
-});
-
-
-// MongoDB connection
-mongoose.connect('mongodb+srv://anika:pTnhynCIOg4QJc9G@cluster0.o0nwk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+// MongoDB connection (ensure MONGO_URI is set in Vercel's environment variables)
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
-    
+
+// Middleware
+app.use(cors({
+    origin: 'http://localhost:5173', // Change to your deployed frontend URL in production
+    credentials: true
+}));
+app.use(express.json());
+app.use(cookieParser());
+
+// Optional CORS headers for edge cases
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); // Change to production URL
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    next();
+});
+
 // JWT Secret
-require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_here';
 
 // Schemas
@@ -45,139 +40,107 @@ const productSchema = new mongoose.Schema({
     barcode: String,
     description: String,
     category: { type: String, default: 'Uncategorized' }
-}, { versionKey: false });
+}, { versionKey: false, timestamps: true });
 
 const categorySchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true }
 }, { versionKey: false });
 
 const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  passwordHash: { type: String, required: true }
+    email: { type: String, required: true, unique: true },
+    passwordHash: { type: String, required: true }
 }, { versionKey: false });
 
 const Product = mongoose.model('Product', productSchema);
 const Category = mongoose.model('Category', categorySchema);
 const User = mongoose.model('User', userSchema);
 
-// Auth middleware
+// JWT Auth middleware
 const authenticateJWT = (req, res, next) => {
-  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'Authentication required' });
+    const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'Authentication required' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid or expired token' });
-    req.user = user;
-    next();
-  });
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ message: 'Invalid or expired token' });
+        req.user = user;
+        next();
+    });
 };
 
-// --- AUTH ROUTES ---
-
+// AUTH ROUTES
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: 'User already exists' });
+    try {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) return res.status(400).json({ message: 'User already exists' });
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, passwordHash });
-    await newUser.save();
+        const passwordHash = await bcrypt.hash(password, 10);
+        const newUser = new User({ email, passwordHash });
+        await newUser.save();
 
-    // Auto-login after registration
-    const token = jwt.sign(
-      { userId: newUser._id, email: newUser.email, role: newUser.role },
-      JWT_SECRET,
-      { expiresIn: '1d' }
-    );
+        const token = jwt.sign({ userId: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: '1d' });
 
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 24 * 60 * 60 * 1000
-    }).json({ message: 'Registered and logged in successfully' });
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000
+        }).json({ message: 'Registered and logged in successfully' });
 
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Registration failed', error: error.message });
-  }
+    } catch (error) {
+        res.status(500).json({ message: 'Registration failed', error: error.message });
+    }
 });
 
-
-// Login route
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password)
-    return res.status(400).json({ message: 'Email and password required' });
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
-  try {
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(401).json({ message: 'Invalid credentials' });
+    try {
+        const user = await User.findOne({ email });
+        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch)
-      return res.status(401).json({ message: 'Invalid credentials' });
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign(
-      { userId: user._id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '1d' }
-    );
+        const token = jwt.sign({ userId: user._id, email: user.email }, JWT_SECRET, { expiresIn: '1d' });
 
-    // Send JWT token as httpOnly cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      sameSite: 'strict'
-    }).json({ message: 'Login successful' });
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 24 * 60 * 60 * 1000
+        }).json({ message: 'Login successful' });
 
-  } catch (error) {
-    res.status(500).json({ message: 'Login failed', error: error.message });
-  }
+    } catch (error) {
+        res.status(500).json({ message: 'Login failed', error: error.message });
+    }
 });
 
-// Logout route
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('token').json({ message: 'Logged out successfully' });
+    res.clearCookie('token').json({ message: 'Logged out successfully' });
 });
 
-// Auth check (protected route)
 app.get('/api/auth/check', authenticateJWT, (req, res) => {
-  res.json({ message: 'Authenticated', user: req.user });
+    res.json({ message: 'Authenticated', user: req.user });
 });
 
-
-// Product APIs
-
-// Scan and add product
+// PRODUCT ROUTES
 app.post('/api/products/scan', async (req, res) => {
     const { barcode } = req.body;
 
     try {
         const existingProduct = await Product.findOne({ barcode });
-        if (existingProduct) {
-            return res.status(200).json({ message: 'Product already exists' });
-        }
+        if (existingProduct) return res.status(200).json({ message: 'Product already exists' });
 
         const response = await axios.get(`https://products-test-aci.onrender.com/product/${barcode}`);
-
-        if (!response.data.status) {
-            return res.status(404).json({ message: 'Product not found' });
-        }
+        if (!response.data.status) return res.status(404).json({ message: 'Product not found' });
 
         const { material, barcode: fetchedBarcode, description } = response.data.product;
 
-        const newProduct = new Product({
-            material,
-            barcode: fetchedBarcode,
-            description
-        });
-
+        const newProduct = new Product({ material, barcode: fetchedBarcode, description });
         await newProduct.save();
 
         res.status(201).json({ message: 'Product saved successfully' });
@@ -187,7 +150,6 @@ app.post('/api/products/scan', async (req, res) => {
     }
 });
 
-// Get all products
 app.get('/api/products', async (req, res) => {
     try {
         const products = await Product.find();
@@ -197,23 +159,19 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// Update product category
 app.put('/api/products/:id', async (req, res) => {
     const { id } = req.params;
     const { category } = req.body;
 
     try {
         const product = await Product.findByIdAndUpdate(id, { category }, { new: true });
-        if (!product) {
-            return res.status(404).json({ message: 'Product not found' });
-        }
+        if (!product) return res.status(404).json({ message: 'Product not found' });
         res.json({ message: 'Product category updated', product });
     } catch (error) {
         res.status(500).json({ message: 'Error updating product', error: error.message });
     }
 });
 
-// Delete product
 app.delete('/api/products/:id', async (req, res) => {
     const { id } = req.params;
 
@@ -226,9 +184,7 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
-// Category APIs----------->
-
-// Get all categories
+// CATEGORY ROUTES
 app.get('/api/categories', async (req, res) => {
     try {
         const categories = await Category.find();
@@ -238,15 +194,12 @@ app.get('/api/categories', async (req, res) => {
     }
 });
 
-// Add new category
 app.post('/api/categories', async (req, res) => {
     try {
         const { name } = req.body;
 
         const exists = await Category.findOne({ name });
-        if (exists) {
-            return res.status(400).json({ message: 'Category already exists' });
-        }
+        if (exists) return res.status(400).json({ message: 'Category already exists' });
 
         const category = new Category({ name });
         await category.save();
@@ -256,7 +209,6 @@ app.post('/api/categories', async (req, res) => {
     }
 });
 
-// Delete category
 app.delete('/api/categories/:name', async (req, res) => {
     const { name } = req.params;
 
@@ -272,34 +224,30 @@ app.delete('/api/categories/:name', async (req, res) => {
     }
 });
 
-// Analytics Route --------->
+// ANALYTICS ROUTE
 app.get('/api/analytics', async (req, res) => {
-  try {
-    const categories = await Category.find();
-    const products = await Product.find().sort({ createdAt: -1 });
+    try {
+        const categories = await Category.find();
+        const products = await Product.find().sort({ createdAt: -1 });
 
-    // Count products in each category
-    const categoryCounts = {};
-    categories.forEach(cat => {
-      categoryCounts[cat.name] = products.filter(product => product.category === cat.name).length;
-    });
+        const categoryCounts = {};
+        categories.forEach(cat => {
+            categoryCounts[cat.name] = products.filter(product => product.category === cat.name).length;
+        });
 
-    // Add Uncategorized count
-    categoryCounts['Uncategorized'] = products.filter(product => product.category === 'Uncategorized').length;
+        categoryCounts['Uncategorized'] = products.filter(product => product.category === 'Uncategorized').length;
 
-    // Get recently added 5 products
-    const recentProducts = products.slice(0, 5);
+        const recentProducts = products.slice(0, 5);
 
-    res.json({
-      categoryCounts,
-      recentProducts,
-      totalProducts: products.length
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch analytics' });
-  }
+        res.json({
+            categoryCounts,
+            recentProducts,
+            totalProducts: products.length
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to fetch analytics' });
+    }
 });
 
-
-// Start server
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Vercel handler export
+module.exports = app;
