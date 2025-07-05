@@ -5,6 +5,6 @@ const productSchema = new mongoose.Schema({
   barcode: String,
   description: String,
   category: { type: String, default: 'Uncategorized' }
-}, { versionKey: false });
+}, { versionKey: false, timestamps: true });
 
 module.exports = mongoose.model('Product', productSchema);
