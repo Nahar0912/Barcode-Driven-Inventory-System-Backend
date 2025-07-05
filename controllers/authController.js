@@ -52,7 +52,7 @@ exports.login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 24 * 60 * 60 * 1000,
-      sameSite: 'strict'
+      sameSite: 'lax'
     }).json({ message: 'Login successful' });
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message });
