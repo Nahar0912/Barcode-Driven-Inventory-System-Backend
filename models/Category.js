@@ -4,4 +4,4 @@ const categorySchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true }
 }, { versionKey: false });
 
-module.exports = mongoose.model('Category', categorySchema);
+module.exports = mongoose.models.Category || mongoose.model('Category', categorySchema);

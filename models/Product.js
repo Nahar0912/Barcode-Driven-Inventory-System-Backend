@@ -7,4 +7,4 @@ const productSchema = new mongoose.Schema({
   category: { type: String, default: 'Uncategorized' }
 }, { versionKey: false, timestamps: true });
 
-module.exports = mongoose.model('Product', productSchema);
+module.exports = mongoose.models.Product || mongoose.model('Product', productSchema);

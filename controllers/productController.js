@@ -1,15 +1,21 @@
-const Product = require('../models/productModel');
+const Product = require('../models/Product');
+const connectDB = require('../utils/db');
 const axios = require('axios');
 
 exports.scanProduct = async (req, res) => {
   const { barcode } = req.body;
+  if (!barcode) return res.status(400).json({ message: 'Barcode is required' });
 
   try {
+    await connectDB();
+
     const existingProduct = await Product.findOne({ barcode });
-    if (existingProduct) return res.status(200).json({ message: 'Product already exists' });
+    if (existingProduct)
+      return res.status(200).json({ message: 'Product already exists' });
 
     const response = await axios.get(`https://products-test-aci.onrender.com/product/${barcode}`);
-    if (!response.data.status) return res.status(404).json({ message: 'Product not found' });
+    if (!response.data.status)
+      return res.status(404).json({ message: 'Product not found' });
 
     const { material, barcode: fetchedBarcode, description } = response.data.product;
 
@@ -17,7 +23,6 @@ exports.scanProduct = async (req, res) => {
     await newProduct.save();
 
     res.status(201).json({ message: 'Product saved successfully' });
-
   } catch (error) {
     res.status(500).json({ message: 'Error saving product', error: error.message });
   }
@@ -25,6 +30,8 @@ exports.scanProduct = async (req, res) => {
 
 exports.getProducts = async (req, res) => {
   try {
+    await connectDB();
+
     const products = await Product.find();
     res.json(products);
   } catch (error) {
@@ -33,9 +40,15 @@ exports.getProducts = async (req, res) => {
 };
 
 exports.updateProductCategory = async (req, res) => {
+  const { id } = req.params;
+  const { category } = req.body;
+
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, { category: req.body.category }, { new: true });
+    await connectDB();
+
+    const product = await Product.findByIdAndUpdate(id, { category }, { new: true });
     if (!product) return res.status(404).json({ message: 'Product not found' });
+
     res.json({ message: 'Product category updated', product });
   } catch (error) {
     res.status(500).json({ message: 'Error updating product', error: error.message });
@@ -43,9 +56,14 @@ exports.updateProductCategory = async (req, res) => {
 };
 
 exports.deleteProduct = async (req, res) => {
+  const { id } = req.params;
+
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    await connectDB();
+
+    const product = await Product.findByIdAndDelete(id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
+
     res.json({ message: 'Product deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Error deleting product', error: error.message });
