@@ -1,58 +1,53 @@
+const Product = require('../models/productModel');
 const axios = require('axios');
-const Product = require('../models/Product');
 
-// Add product by barcode
-const addProductByBarcode = async (req, res) => {
-    const { barcode } = req.body;
-    try {
-        // Check if already exists
-        const existingProduct = await Product.findOne({ barcode });
-        if (existingProduct) {
-            return res.status(400).json({ message: 'Product already exists.' });
-        }
+exports.scanProduct = async (req, res) => {
+  const { barcode } = req.body;
 
-        // Fetch product details from external API
-        const response = await axios.get(`http://localhost:5000/product/${barcode}`);
-        const productData = response.data;
+  try {
+    const existingProduct = await Product.findOne({ barcode });
+    if (existingProduct) return res.status(200).json({ message: 'Product already exists' });
 
-        const newProduct = new Product({
-            barcode,
-            name: `Test Product ${barcode}`,
-            description: 'This is a dummy product description.',
-            price: Math.floor(Math.random() * 1000) + 100,
-            image: 'https://via.placeholder.com/150',
-            category: 'Uncategorized'
-        });
-        await newProduct.save();
-        res.status(201).json(newProduct);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching product data.', error: error.message });
-    }
+    const response = await axios.get(`https://products-test-aci.onrender.com/product/${barcode}`);
+    if (!response.data.status) return res.status(404).json({ message: 'Product not found' });
+
+    const { material, barcode: fetchedBarcode, description } = response.data.product;
+
+    const newProduct = new Product({ material, barcode: fetchedBarcode, description });
+    await newProduct.save();
+
+    res.status(201).json({ message: 'Product saved successfully' });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error saving product', error: error.message });
+  }
 };
 
-// Get all products (with optional category filter)
-const getAllProducts = async (req, res) => {
-    try {
-        const { category } = req.query;
-        const query = category ? { category } : {};
-        const products = await Product.find(query);
-        res.json(products);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching products.' });
-    }
+exports.getProducts = async (req, res) => {
+  try {
+    const products = await Product.find();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching products', error: error.message });
+  }
 };
 
-// Update product category
-const updateProductCategory = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { category } = req.body;
-
-        const updatedProduct = await Product.findByIdAndUpdate(id, { category }, { new: true });
-        res.json(updatedProduct);
-    } catch (error) {
-        res.status(500).json({ message: 'Error updating product category.' });
-    }
+exports.updateProductCategory = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndUpdate(req.params.id, { category: req.body.category }, { new: true });
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json({ message: 'Product category updated', product });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating product', error: error.message });
+  }
 };
 
-module.exports = { addProductByBarcode, getAllProducts, updateProductCategory };
+exports.deleteProduct = async (req, res) => {
+  try {
+    const product = await Product.findByIdAndDelete(req.params.id);
+    if (!product) return res.status(404).json({ message: 'Product not found' });
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error deleting product', error: error.message });
+  }
+};

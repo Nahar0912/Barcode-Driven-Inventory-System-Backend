@@ -1,10 +1,11 @@
 const express = require('express');
-const { addProductByBarcode, getAllProducts, updateProductCategory } = require('../controllers/productController');
+const { scanProduct, getProducts, updateProductCategory, deleteProduct } = require('../controllers/productController');
 
 const router = express.Router();
 
-router.post('/add', addProductByBarcode);
-router.get('/all', getAllProducts);
-router.put('/update-category', updateProductCategory);
+router.post('/scan', scanProduct);
+router.get('/', getProducts);
+router.put('/:id', updateProductCategory);
+router.delete('/:id', deleteProduct);
 
 module.exports = router;
