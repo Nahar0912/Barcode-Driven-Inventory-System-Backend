@@ -36,8 +36,8 @@ Features:
 git clone https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend.git
 cd barcode-inventory-system-backend
 npm install
-Create File:
-  MONGODB_URI=your_mongo_connection_string
+Create .env file:
+  MONGO_URI=your_mongo_connection_string
   JWT_SECRET=your_jwt_secret
 npm run dev
 
