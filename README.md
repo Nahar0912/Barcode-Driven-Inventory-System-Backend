@@ -1,8 +1,4 @@
 
----
-
-# ✅ `README.md` for Backend
-```markdown
 # 🛠️ Barcode-Driven Inventory System - Backend
 
 ### Live API
